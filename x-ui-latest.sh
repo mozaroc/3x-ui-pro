@@ -328,7 +328,7 @@ EOF
     # and routes Clash/Mihomo clients to dynamic clash.yaml generator
     location ~ ^/${sub_path}/(?<clash_sub_id>[^/]+)$ {
         if (\$hack = 1) { return 404; }
-        if (\$is_clash_client = 1) { rewrite ^ /__clash_api?sub_id=\$clash_sub_id last; }
+        if (\$serve_clash_yaml = 1) { rewrite ^ /__clash_api?sub_id=\$clash_sub_id last; }
         proxy_redirect off;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
@@ -412,10 +412,16 @@ limit_req_zone  \$binary_remote_addr zone=diag_api:10m  rate=6r/m;
 limit_req_zone  \$binary_remote_addr zone=diag_page:10m rate=30r/m;
 limit_conn_zone \$binary_remote_addr zone=per_ip:10m;
 
-# Detect Clash/Mihomo subscription clients by User-Agent
-map \$http_user_agent \$is_clash_client {
+# Detect Clash/Mihomo clients by User-Agent
+map \$http_user_agent \$is_clash_ua {
     ~*(clash|clashx|clashn|mihomo|stash|surfboard)  1;
     default                                          0;
+}
+# Serve clash.yaml only when: Clash UA AND no X-Proxy-Provider header
+# (proxy-provider refresh requests carry X-Proxy-Provider: true and must get the real sub)
+map "\$is_clash_ua:\$http_x_proxy_provider" \$serve_clash_yaml {
+    "1:"    1;
+    default 0;
 }
 
 server {

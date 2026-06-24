@@ -64,6 +64,9 @@ proxy-providers:
     url: https://${DOMAIN}/${SUB_PATH}/${SUB_ID}
     path: ./proxy_providers/base64.yml
     interval: 3600
+    header:
+      X-Proxy-Provider:
+        - "true"
     health-check:
       enable: true
       url: https://www.gstatic.com/generate_204
