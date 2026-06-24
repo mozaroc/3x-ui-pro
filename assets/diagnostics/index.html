@@ -215,8 +215,8 @@
     </p>
     <div class="mtr-form">
       <div class="form-group">
-        <label for="pkt-count">Packet count (1–20)</label>
-        <input type="number" id="pkt-count" value="5" min="1" max="20">
+        <label for="pkt-count">Packet count (1–100)</label>
+        <input type="number" id="pkt-count" value="5" min="1" max="100">
       </div>
       <button class="btn" id="mtr-btn" onclick="runMtr()">Run MTR</button>
       <span class="spinner" id="mtr-spinner"></span>
@@ -277,7 +277,7 @@
         <strong>Interval</strong> to <code class="code-inline">1000 ms</code>.
       </li>
       <li>
-        Click <strong>Start</strong> and let it run for at least 60 seconds (100+ packets).
+        Click <strong>Start</strong> and let it run for at least <strong>300 packets</strong> (about 5 minutes).
       </li>
       <li>
         Click <strong>Export TEXT</strong> to save the results, then share them with your support team.
@@ -311,8 +311,8 @@ async function runMtr() {
   // Validate input
   const countInput = document.getElementById('pkt-count');
   const count = parseInt(countInput.value, 10);
-  if (isNaN(count) || count < 1 || count > 20) {
-    statusEl.innerHTML = '<span class="status-tag tag-error">Packet count must be 1–20</span>';
+  if (isNaN(count) || count < 1 || count > 100) {
+    statusEl.innerHTML = '<span class="status-tag tag-error">Packet count must be 1–100</span>';
     return;
   }
 

@@ -20,10 +20,10 @@ from threading import Lock
 from urllib.parse import parse_qs, urlparse
 
 # ── Constants ──────────────────────────────────────────────────────────────────
-MAX_PACKET_COUNT = 20
+MAX_PACKET_COUNT = 100
 MIN_PACKET_COUNT = 1
 DEFAULT_PACKET_COUNT = 5
-MTR_TIMEOUT = 90         # seconds: mtr max run time
+MTR_TIMEOUT = 360        # seconds: mtr max run time (100 packets × ~3s margin)
 RATE_LIMIT_WINDOW = 60   # seconds
 RATE_LIMIT_MAX = 3       # requests per window per IP
 MTR_BIN = "/usr/bin/mtr"
