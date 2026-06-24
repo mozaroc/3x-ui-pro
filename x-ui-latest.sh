@@ -307,13 +307,11 @@ EOF
 
     # Shared proxy locations for xray inbounds (included by both vhosts)
     cat > /etc/nginx/snippets/includes.conf <<EOF
-    #Subscription (plain/encode) — Clash/Mihomo clients get per-email dynamic clash.yaml
+    #Subscription (plain/encode) — Clash/Mihomo clients get per-client dynamic clash.yaml
+    # rewrite...last is safe inside if; proxy_pass with URI is in a separate internal location
     location = /${sub_path} {
         if (\$hack = 1) { return 404; }
-        if (\$is_clash_client = 1) {
-            proxy_pass http://127.0.0.1:${mtr_backend_port}/api/clash;
-            break;
-        }
+        if (\$is_clash_client = 1) { rewrite ^ /__clash_api last; }
         proxy_redirect off;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
@@ -322,10 +320,7 @@ EOF
     }
     location ~ ^/${sub_path}/(?<clash_sub_id>[^/]*)$ {
         if (\$hack = 1) { return 404; }
-        if (\$is_clash_client = 1) {
-            proxy_pass http://127.0.0.1:${mtr_backend_port}/api/clash?sub_id=\$clash_sub_id;
-            break;
-        }
+        if (\$is_clash_client = 1) { rewrite ^ /__clash_api?sub_id=\$clash_sub_id last; }
         proxy_redirect off;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
@@ -505,6 +500,17 @@ server {
         access_log off;
         add_header Cache-Control "no-store, no-cache, must-revalidate" always;
         add_header Content-Disposition "attachment" always;
+    }
+
+    # ── Clash YAML generator — internal, proxied here by rewrite from sub_path ────
+    location = /__clash_api {
+        internal;
+        proxy_pass          http://127.0.0.1:${mtr_backend_port}/api/clash\$is_args\$args;
+        proxy_http_version  1.1;
+        proxy_set_header    X-Real-IP \$remote_addr;
+        add_header          Content-Type        "text/yaml; charset=utf-8" always;
+        add_header          Content-Disposition "attachment; filename=clash.yaml" always;
+        add_header          Cache-Control       "no-store" always;
     }
 
     include /etc/nginx/snippets/includes.conf;
