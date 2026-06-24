@@ -462,7 +462,7 @@ server {
     location ^~ ${diag_path}api/mtr {
         limit_req  zone=diag_api burst=2 nodelay;
         limit_conn per_ip 2;
-        proxy_pass         http://127.0.0.1:${mtr_backend_port};
+        proxy_pass         http://127.0.0.1:${mtr_backend_port}/api/mtr;
         proxy_http_version 1.1;
         proxy_set_header   X-Real-IP       \$remote_addr;
         proxy_set_header   X-Forwarded-For \$proxy_add_x_forwarded_for;

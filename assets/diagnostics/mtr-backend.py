@@ -187,7 +187,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path not in ("/mtr", "/api/mtr"):
+        if not (parsed.path in ("/mtr", "/api/mtr") or parsed.path.endswith("/api/mtr")):
             self._send_json(404, {"error": "not found"})
             return
 
