@@ -180,10 +180,38 @@ class Handler(BaseHTTPRequestHandler):
         return ip
 
     def do_GET(self):
-        if self.path == "/health":
+        parsed = urlparse(self.path)
+
+        if parsed.path == "/health":
             self._send_json(200, {"ok": True})
-        else:
-            self._send_json(404, {"error": "not found"})
+            return
+
+        # ── Clash subscription generator ───────────────────────────────────────
+        if parsed.path == "/api/clash" or parsed.path.endswith("/api/clash"):
+            tpl_path = "/var/www/subpage/clash.yaml.tpl"
+            if not os.path.isfile(tpl_path):
+                self._send_json(404, {"error": "clash template not found"})
+                return
+            params = parse_qs(parsed.query)
+            sub_id = params.get("sub_id", [""])[0].strip()
+            try:
+                with open(tpl_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                content = content.replace("${SUB_ID}", sub_id)
+                payload = content.encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/yaml; charset=utf-8")
+                self.send_header("Content-Length", str(len(payload)))
+                self.send_header("Content-Disposition", "attachment; filename=clash.yaml")
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(payload)
+            except Exception as exc:
+                log.error("clash template error: %s", exc)
+                self._send_json(500, {"error": "internal error"})
+            return
+
+        self._send_json(404, {"error": "not found"})
 
     def do_POST(self):
         parsed = urlparse(self.path)

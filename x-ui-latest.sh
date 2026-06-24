@@ -307,19 +307,25 @@ EOF
 
     # Shared proxy locations for xray inbounds (included by both vhosts)
     cat > /etc/nginx/snippets/includes.conf <<EOF
-    #Subscription (plain/encode) — Clash/Mihomo clients get static clash.yaml by UA
-    location /${sub_path} {
+    #Subscription (plain/encode) — Clash/Mihomo clients get per-email dynamic clash.yaml
+    location = /${sub_path} {
         if (\$hack = 1) { return 404; }
-        if (\$is_clash_client = 1) { rewrite ^ /__clash_sub last; }
+        if (\$is_clash_client = 1) {
+            proxy_pass http://127.0.0.1:${mtr_backend_port}/api/clash;
+            break;
+        }
         proxy_redirect off;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_pass https://127.0.0.1:${sub_port};
     }
-    location /${sub_path}/ {
+    location ~ ^/${sub_path}/(?<clash_sub_id>[^/]*)$ {
         if (\$hack = 1) { return 404; }
-        if (\$is_clash_client = 1) { rewrite ^ /__clash_sub last; }
+        if (\$is_clash_client = 1) {
+            proxy_pass http://127.0.0.1:${mtr_backend_port}/api/clash?sub_id=\$clash_sub_id;
+            break;
+        }
         proxy_redirect off;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
@@ -499,16 +505,6 @@ server {
         access_log off;
         add_header Cache-Control "no-store, no-cache, must-revalidate" always;
         add_header Content-Disposition "attachment" always;
-    }
-
-    # ── Clash subscription — internal static file served by UA routing ──────────
-    location = /__clash_sub {
-        internal;
-        default_type text/plain;
-        alias        /var/www/subpage/clash.yaml;
-        add_header   Content-Type        "text/yaml; charset=utf-8" always;
-        add_header   Content-Disposition "attachment; filename=clash.yaml" always;
-        add_header   Cache-Control       "no-store" always;
     }
 
     include /etc/nginx/snippets/includes.conf;
@@ -875,12 +871,13 @@ EOF
 install_clash_sub() {
     local clash_dir="/var/www/subpage"
     mkdir -p "${clash_dir}"
-    if curl -fsSL "${GITHUB_RAW}/assets/clash/clash.yaml" -o "${clash_dir}/clash.yaml"; then
-        sed -i "s|\${DOMAIN}|${domain}|g"   "${clash_dir}/clash.yaml"
-        sed -i "s|\${SUB_PATH}|${sub_path}|g" "${clash_dir}/clash.yaml"
+    if curl -fsSL "${GITHUB_RAW}/assets/clash/clash.yaml" -o "${clash_dir}/clash.yaml.tpl"; then
+        # Substitute domain and sub_path; leave ${EMAIL} for mtr-backend to fill per-request
+        sed -i "s|\${DOMAIN}|${domain}|g"     "${clash_dir}/clash.yaml.tpl"
+        sed -i "s|\${SUB_PATH}|${sub_path}|g" "${clash_dir}/clash.yaml.tpl"
         chown -R www-data:www-data "${clash_dir}" 2>/dev/null || true
-        chmod 644 "${clash_dir}/clash.yaml"
-        msg_ok "Clash subscription config installed."
+        chmod 644 "${clash_dir}/clash.yaml.tpl"
+        msg_ok "Clash subscription template installed."
     else
         msg_err "Failed to download clash.yaml from GitHub."
     fi
