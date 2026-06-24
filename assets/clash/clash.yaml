@@ -71,53 +71,53 @@ proxy-groups:
   - name: 🌍 VPN
     icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Hijacking.png
     type: select
+    use:
+      - sub
     proxies:
       - ⚡️ Fastest
-      # LEAVE THIS LINE!
-    include-all: true
   - name: ▶️ YouTube
     icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/YouTube.png
     type: select
+    use:
+      - sub
     proxies:
       - 🌍 VPN
-      # LEAVE THIS LINE!
-    include-all: true
   - name: 💬 Discord
     icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Discord.png
     type: select
+    use:
+      - sub
     proxies:
       - 🌍 VPN
-      # LEAVE THIS LINE!
-    include-all: true
   - name: ⚡️ Fastest
     icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Auto.png
     type: url-test
     tolerance: 150
     url: https://cp.cloudflare.com/generate_204
     interval: 300
-    proxies:
-      # LEAVE THIS LINE!
-    include-all: true
+    use:
+      - sub
   - name: ➤ Telegram
     icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Telegram.png
     type: select
-    include-all: true
+    use:
+      - sub
     proxies:
       - 🌍 VPN
   - name: ➤ WhatsApp
     icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Facebook.png
     type: select
-    include-all: true
+    use:
+      - sub
     proxies:
       - 🌍 VPN
   - name: PROXY
-    remnawave:
-      include-proxies: false
     type: select
     hidden: true
+    use:
+      - sub
     proxies:
       - 🌍 VPN
-    include-all: true
 
 rule-providers:
   facebook-ips:
