@@ -197,6 +197,11 @@ validate_domains() {
     RealitySubDomain=$(echo "$reality_domain" | sed 's/^[^ ]* \|\..*//g')
     RealityMainDomain=$(echo "$reality_domain" | sed 's/.*\.\([^.]*\..*\)$/\1/')
     [[ "${RealitySubDomain}.${RealityMainDomain}" != "${reality_domain}" ]] && RealityMainDomain=${reality_domain}
+
+    if [[ "$domain" == "$reality_domain" ]]; then
+        msg_err "Panel domain and REALITY domain must be different! Got: ${domain}"
+        exit 1
+    fi
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
