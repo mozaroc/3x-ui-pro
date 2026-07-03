@@ -328,6 +328,10 @@ server {
     root /var/www/html/;
     real_ip_header proxy_protocol;
     set_real_ip_from 127.0.0.1;
+    # This vhost listens on 7443 behind the SNI stream (public port 443). Without
+    # this, nginx bakes :7443 into redirect Location headers (return/error_page),
+    # so browsers get sent to an unreachable port. Keep redirects relative.
+    absolute_redirect off;
     # Larger h2 preread window improves single-stream upload throughput
     http2_body_preread_size 128k;
     client_body_buffer_size 512k;
