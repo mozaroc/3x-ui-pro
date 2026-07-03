@@ -31,23 +31,23 @@ check_os() {
     echo -e "\nPlease reinstall your server with one of the supported OS versions and try again."
     exit 1
 }
-
-check_cpu() {
-    local cpu_model
-    cpu_model=$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | cut -d: -f2-)
-
-    if echo "$cpu_model" | grep -qi 'QEMU'; then
-        msg_err "QEMU virtual CPU detected!"
-        echo -e "\nYour VPS is running with an emulated QEMU processor."
-        echo -e "Please contact your hosting provider and ask them to switch the CPU type"
-        echo -e "to \e[1;33mhost-passthrough\e[0m (expose real CPU model to the VM)."
-        echo -e "\nThis is required for correct operation of the Xray core."
-        exit 1
-    fi
-}
+#turn off to install on some VPS
+#check_cpu() {
+#    local cpu_model
+#    cpu_model=$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | cut -d: -f2-)
+#
+#    if echo "$cpu_model" | grep -qi 'QEMU'; then
+#        msg_err "QEMU virtual CPU detected!"
+#        echo -e "\nYour VPS is running with an emulated QEMU processor."
+#        echo -e "Please contact your hosting provider and ask them to switch the CPU type"
+#        echo -e "to \e[1;33mhost-passthrough\e[0m (expose real CPU model to the VM)."
+#        echo -e "\nThis is required for correct operation of the Xray core."
+#        exit 1
+#    fi
+#}
 
 check_os
-check_cpu
+#check_cpu
 
 # ─── Constants ───────────────────────────────────────────────────────────────
 XUIDB="/etc/x-ui/x-ui.db"
