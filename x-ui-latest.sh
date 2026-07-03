@@ -1,6 +1,6 @@
 #!/bin/bash
 #################### x-ui-pro-refactor @ github.com/mozaroc #############################
-[[ $EUID -ne 0 ]] && echo "not root!" && sudo su -
+[[ $EUID -ne 0 ]] && { echo "Run as root: sudo bash $0"; exit 1; }
 
 # ─── Output helpers ──────────────────────────────────────────────────────────
 msg_ok()  { echo -e "\e[1;42m $1 \e[0m"; }
@@ -62,14 +62,16 @@ INSTALL="n"
 AUTODOMAIN="n"
 CFALLOW="n"
 
-# ─── Stop & clean previous install ───────────────────────────────────────────
-systemctl stop x-ui 2>/dev/null || true
-rm -rf /etc/systemd/system/x-ui.service
-rm -rf /usr/local/x-ui
-rm -rf /etc/x-ui
-rm -rf /etc/nginx/sites-enabled/*
-rm -rf /etc/nginx/sites-available/*
-rm -rf /etc/nginx/stream-enabled/*
+# ─── Stop & clean previous install (called from main, after domain validation) ─
+clean_previous_install() {
+    systemctl stop x-ui 2>/dev/null || true
+    rm -rf /etc/systemd/system/x-ui.service
+    rm -rf /usr/local/x-ui
+    rm -rf /etc/x-ui
+    rm -rf /etc/nginx/sites-enabled/*
+    rm -rf /etc/nginx/sites-available/*
+    rm -rf /etc/nginx/stream-enabled/*
+}
 
 # ─── Port / path generators ──────────────────────────────────────────────────
 get_port() {
@@ -136,7 +138,8 @@ Pak=$(type apt &>/dev/null && echo "apt" || echo "yum")
 # ─────────────────────────────────────────────────────────────────────────────
 uninstall_xui() {
     printf 'y\n' | x-ui uninstall 2>/dev/null || true
-    rm -rf /etc/x-ui/ /usr/local/x-ui/ /usr/bin/x-ui/
+    rm -rf /etc/x-ui/ /usr/local/x-ui/
+    rm -f  /usr/bin/x-ui
     $Pak -y remove nginx nginx-common nginx-core nginx-full python3-certbot-nginx
     $Pak -y purge  nginx nginx-common nginx-core nginx-full python3-certbot-nginx
     $Pak -y autoremove
@@ -269,6 +272,16 @@ get_ssl_certs() {
 configure_nginx() {
     mkdir -p /etc/nginx/stream-enabled /etc/nginx/snippets
 
+    # nginx >= 1.25.1 deprecates "listen ... http2" in favor of "http2 on;";
+    # older versions (Debian 12 / Ubuntu 24.04) don't know the new directive
+    local ngx_ver http2_listen="" http2_on=""
+    ngx_ver=$(nginx -v 2>&1 | grep -oP '[0-9]+\.[0-9]+\.[0-9]+' || echo 0)
+    if [[ "$(printf '%s\n' 1.25.1 "$ngx_ver" | sort -V | head -1)" == "1.25.1" ]]; then
+        http2_on="http2 on;"
+    else
+        http2_listen=" http2"
+    fi
+
     # SNI-based stream: reality → 8443, domain → 7443
     cat > /etc/nginx/stream-enabled/stream.conf <<EOF
 map \$ssl_preread_server_name \$sni_name {
@@ -295,8 +308,6 @@ EOF
         || echo "stream { include /etc/nginx/stream-enabled/*.conf; }" >> /etc/nginx/nginx.conf
     grep -xqFR "load_module modules/ngx_stream_module.so;" /etc/nginx/* \
         || sed -i '1s/^/load_module \/usr\/lib\/nginx\/modules\/ngx_stream_module.so; /' /etc/nginx/nginx.conf
-    grep -xqFR "load_module modules/ngx_stream_geoip2_module.so;" /etc/nginx* \
-        || sed -i '2s/^/load_module \/usr\/lib\/nginx\/modules\/ngx_stream_geoip2_module.so; /' /etc/nginx/nginx.conf
     grep -xqFR "worker_rlimit_nofile 16384;" /etc/nginx/* \
         || echo "worker_rlimit_nofile 16384;" >> /etc/nginx/nginx.conf
     sed -i "/worker_connections/c\worker_connections 4096;" /etc/nginx/nginx.conf
@@ -432,8 +443,9 @@ map "\$is_clash_ua:\$arg_provider" \$serve_clash_yaml {
 server {
     server_tokens off;
     server_name ${domain};
-    listen 7443 ssl http2 proxy_protocol;
-    listen [::]:7443 ssl http2 proxy_protocol;
+    listen 7443 ssl${http2_listen} proxy_protocol;
+    listen [::]:7443 ssl${http2_listen} proxy_protocol;
+    ${http2_on}
     index index.html index.htm index.php;
     root /var/www/html/;
     real_ip_header proxy_protocol;
@@ -562,8 +574,9 @@ EOF
 server {
     server_tokens off;
     server_name ${reality_domain};
-    listen 9443 ssl http2;
-    listen [::]:9443 ssl http2;
+    listen 9443 ssl${http2_listen};
+    listen [::]:9443 ssl${http2_listen};
+    ${http2_on}
     index index.html index.htm index.php;
     root /var/www/html/;
     ssl_protocols TLSv1.2 TLSv1.3;
@@ -696,12 +709,16 @@ configure_xui_db() {
 
     x-ui stop 2>/dev/null || true
 
-    local output private_key public_key trojan_pass emoji_flag
-    output=$(/usr/local/x-ui/bin/xray-linux-amd64 x25519)
+    local output private_key public_key trojan_pass emoji_flag xray_bin
+    # install_panel renames armv5/6/7 binaries to xray-linux-arm
+    xray_bin="/usr/local/x-ui/bin/xray-linux-$(_arch)"
+    [[ -f "$xray_bin" ]] || xray_bin="/usr/local/x-ui/bin/xray-linux-arm"
+    output=$("$xray_bin" x25519)
     private_key=$(echo "$output" | grep "^PrivateKey:" | awk '{print $2}')
     public_key=$(echo "$output"  | grep "^Password"   | awk '{print $3}')
     trojan_pass=$(gen_random_string 10)
-    emoji_flag=$(LC_ALL=en_US.UTF-8 curl -s https://ipwho.is/ | jq -r '.flag.emoji')
+    emoji_flag=$(LC_ALL=en_US.UTF-8 curl -s --max-time 10 https://ipwho.is/ | jq -r '.flag.emoji' 2>/dev/null)
+    [[ -z "$emoji_flag" || "$emoji_flag" == "null" ]] && emoji_flag="🌐"
 
     local sub_uri="https://${domain}/${sub_path}/"
     local json_uri="https://${domain}/${json_path}?name="
@@ -1061,7 +1078,9 @@ tune_system() {
 setup_cron() {
     crontab -l 2>/dev/null | grep -v "certbot\|x-ui\|cloudflareips" | crontab -
     (crontab -l 2>/dev/null; echo '@daily   x-ui restart > /dev/null 2>&1 && nginx -s reload')    | crontab -
-    (crontab -l 2>/dev/null; echo '@monthly certbot renew --nginx --non-interactive --post-hook "nginx -s reload" > /dev/null 2>&1') | crontab -
+    # Certs were issued with --standalone: renewal needs port 80 free,
+    # so stop nginx for the few seconds certbot runs
+    (crontab -l 2>/dev/null; echo '@monthly certbot renew --non-interactive --pre-hook "systemctl stop nginx" --post-hook "systemctl start nginx" > /dev/null 2>&1') | crontab -
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1084,15 +1103,9 @@ show_results() {
     if systemctl is-active --quiet x-ui; then
         printf '0\n' | x-ui | grep --color=never -i ':'
         msg_inf "────────────────────────────────────────────────────────────────────────────────"
-        nginx -T | grep -i 'ssl_certificate\|ssl_certificate_key'
-        msg_inf "────────────────────────────────────────────────────────────────────────────────"
-        certbot certificates | grep -i 'Path:\|Domains:\|Expiry Date:'
-        msg_inf "────────────────────────────────────────────────────────────────────────────────"
         msg_inf "X-UI Secure Panel: https://${domain}/${panel_path}/\n"
         echo -e "Username:  ${config_username}\n"
         echo -e "Password:  ${config_password}\n"
-        msg_inf "────────────────────────────────────────────────────────────────────────────────"
-        msg_inf "Clash Sub (auto by UA): https://${domain}/${sub_path}/\n"
         msg_inf "────────────────────────────────────────────────────────────────────────────────"
         msg_inf "Network Diagnostics: https://${domain}${diag_path}\n"
         msg_inf "────────────────────────────────────────────────────────────────────────────────"
@@ -1109,6 +1122,7 @@ show_results() {
 # ─────────────────────────────────────────────────────────────────────────────
 main() {
     validate_domains
+    clean_previous_install
     install_packages
     get_server_ip
     get_ssl_certs

@@ -136,6 +136,16 @@ blue "Regenerating nginx configs..."
 mkdir -p /etc/nginx/stream-enabled /etc/nginx/snippets \
          /etc/nginx/sites-available /etc/nginx/sites-enabled
 
+# nginx >= 1.25.1 deprecates "listen ... http2" in favor of "http2 on;";
+# older versions (Debian 12 / Ubuntu 24.04) don't know the new directive
+http2_listen="" ; http2_on=""
+ngx_ver=$(nginx -v 2>&1 | grep -oP '[0-9]+\.[0-9]+\.[0-9]+' || echo 0)
+if [[ "$(printf '%s\n' 1.25.1 "$ngx_ver" | sort -V | head -1)" == "1.25.1" ]]; then
+    http2_on="http2 on;"
+else
+    http2_listen=" http2"
+fi
+
 # ── SNI stream ────────────────────────────────────────────────────────────────
 cat > /etc/nginx/stream-enabled/stream.conf <<EOF
 map \$ssl_preread_server_name \$sni_name {
@@ -162,8 +172,6 @@ grep -xqFR "stream { include /etc/nginx/stream-enabled/*.conf; }" /etc/nginx/* \
     || echo "stream { include /etc/nginx/stream-enabled/*.conf; }" >> /etc/nginx/nginx.conf
 grep -xqFR "load_module modules/ngx_stream_module.so;" /etc/nginx/* \
     || sed -i '1s/^/load_module \/usr\/lib\/nginx\/modules\/ngx_stream_module.so; /' /etc/nginx/nginx.conf
-grep -xqFR "load_module modules/ngx_stream_geoip2_module.so;" /etc/nginx/* \
-    || sed -i '2s/^/load_module \/usr\/lib\/nginx\/modules\/ngx_stream_geoip2_module.so; /' /etc/nginx/nginx.conf
 grep -xqFR "worker_rlimit_nofile 16384;" /etc/nginx/* \
     || echo "worker_rlimit_nofile 16384;" >> /etc/nginx/nginx.conf
 sed -i "/worker_connections/c\worker_connections 4096;" /etc/nginx/nginx.conf
@@ -293,8 +301,9 @@ map "\$is_clash_ua:\$arg_provider" \$serve_clash_yaml {
 server {
     server_tokens off;
     server_name ${domain};
-    listen 7443 ssl http2 proxy_protocol;
-    listen [::]:7443 ssl http2 proxy_protocol;
+    listen 7443 ssl${http2_listen} proxy_protocol;
+    listen [::]:7443 ssl${http2_listen} proxy_protocol;
+    ${http2_on}
     index index.html index.htm index.php;
     root /var/www/html/;
     real_ip_header proxy_protocol;
@@ -408,8 +417,9 @@ cat > "/etc/nginx/sites-available/${reality_domain}" <<EOF
 server {
     server_tokens off;
     server_name ${reality_domain};
-    listen 9443 ssl http2;
-    listen [::]:9443 ssl http2;
+    listen 9443 ssl${http2_listen};
+    listen [::]:9443 ssl${http2_listen};
+    ${http2_on}
     index index.html index.htm index.php;
     root /var/www/html/;
     ssl_protocols TLSv1.2 TLSv1.3;
@@ -579,8 +589,5 @@ green "════════════════════════�
 green " Patch complete"
 green "══════════════════════════════════════════════"
 printf "\n  Panel:       https://%s/%s/\n"  "$domain" "$panel_path"
-printf "  Sub (plain): https://%s/%s/\n"   "$domain" "$sub_path"
-printf "  Sub (Clash): https://%s/%s/\n"   "$domain" "$sub_path"
-printf "               (Clash/Mihomo clients get clash.yaml automatically)\n"
 printf "  Diagnostics: https://%s%s\n"     "$domain" "$diag_path"
 echo
