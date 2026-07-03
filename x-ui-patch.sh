@@ -373,8 +373,13 @@ server {
     # hence the try_files → named-location hop.
     location = /${panel_path}/diag {
         auth_request /__diag_auth;
-        error_page 401 403 =302 /${panel_path}/;
+        # Named location (not "=302 /uri") so the deny path emits a real Location
+        # header; an internal-redirect error_page returns a 302 with no Location.
+        error_page 401 403 = @diag_login;
         try_files /__nonexistent @diag_sso_ok;
+    }
+    location @diag_login {
+        return 302 /${panel_path}/;
     }
     location @diag_sso_ok {
         add_header Set-Cookie "diag_key=${diag_token}; Path=${diag_path}; Secure; HttpOnly; SameSite=Lax; Max-Age=604800";
