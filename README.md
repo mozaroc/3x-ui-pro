@@ -40,6 +40,21 @@ bash x-ui-latest.sh -install y -subdomain panel.example.com -reality_domain r.ex
 Замените `panel.example.com` на домен панели, `r.example.com` — на домен для REALITY.
 
 ---
+## Патч
+
+**Шаг 1 — скачать скрипт**
+
+```bash
+wget -qO x-ui-latest.sh https://raw.githubusercontent.com/mozaroc/3x-ui-pro/main/x-ui-patch.sh
+```
+
+**Шаг 2 — запустить**
+
+```bash
+bash x-ui-patch.sh
+```
+
+---
 
 ## Удаление
 
