@@ -51,22 +51,32 @@ printf "    sub_port   = %-6s  sub_path   = %s\n" "$sub_port"  "$sub_path"
 printf "    panel_port = %-6s  panel_path = %s\n" "$panel_port" "$panel_path"
 printf "    json_path  = %s\n" "$json_path"
 
-# ── detect domains from existing nginx ───────────────────────────────────────
-blue "Detecting domains from nginx configs..."
+# ── detect domains ────────────────────────────────────────────────────────────
+blue "Detecting domains..."
 domain=""
 reality_domain=""
 
+# Panel domain: authoritative source is the cert x-ui is configured with
+# (/root/cert/<domain>/...). Scanning nginx alone is unreliable — stale/duplicate
+# vhost files from older installs shadow each other and the loop's result becomes
+# glob/locale-order dependent, which is how the panel vhost ended up written to
+# the wrong filename (bridge missing on the file that actually serves traffic).
+web_cert=$(db "SELECT value FROM settings WHERE key='webCertFile';")
+if [[ "$web_cert" =~ ^/root/cert/([^/]+)/ || "$web_cert" =~ /etc/letsencrypt/live/([^/]+)/ ]]; then
+    domain="${BASH_REMATCH[1]}"
+fi
+
 for f in /etc/nginx/sites-available/*; do
     [[ -f "$f" ]] || continue
-    [[ "$(basename "$f")" == "80.conf" ]] && continue
+    case "$(basename "$f")" in 80.conf|00-maps.conf) continue;; esac
     if grep -q 'listen 7443' "$f" 2>/dev/null; then
-        domain=$(awk '/server_name/{print $2; exit}' "$f" | tr -d ';')
+        [[ -z "$domain" ]] && domain=$(awk '/server_name/{print $2; exit}' "$f" | tr -d ';')
     elif grep -q 'listen 9443' "$f" 2>/dev/null; then
         reality_domain=$(awk '/server_name/{print $2; exit}' "$f" | tr -d ';')
     fi
 done
 
-[[ -n "$domain" ]]         || die "Could not find panel domain (nginx config with 'listen 7443')"
+[[ -n "$domain" ]]         || die "Could not determine panel domain (no webCertFile, no vhost with 'listen 7443')"
 [[ -n "$reality_domain" ]] || die "Could not find reality domain (nginx config with 'listen 9443')"
 printf "    domain         = %s\n" "$domain"
 printf "    reality_domain = %s\n" "$reality_domain"
@@ -570,7 +580,22 @@ server {
 EOF
 
 # ── activate sites ────────────────────────────────────────────────────────────
-rm -f /etc/nginx/sites-enabled/default /etc/nginx/sites-available/default
+# Drop stale panel/reality vhost FILES whose name doesn't match the domains we
+# manage (leftovers from older installs). If left, they shadow the fresh vhosts
+# by server_name and mislead the detection fallback above.
+for f in /etc/nginx/sites-available/*; do
+    [[ -f "$f" ]] || continue
+    bn=$(basename "$f")
+    case "$bn" in 80.conf|00-maps.conf|"$domain"|"$reality_domain") continue;; esac
+    if grep -qE 'listen (7443|9443)' "$f" 2>/dev/null; then
+        blue "Removing stale vhost: $bn"
+        rm -f "$f"
+    fi
+done
+# Wipe every enabled symlink and relink only what we manage, so nothing stale can
+# stay loaded and shadow the panel vhost (this was the cause of the diag 404).
+find /etc/nginx/sites-enabled -mindepth 1 -delete 2>/dev/null || true
+rm -f /etc/nginx/sites-available/default
 ln -sf "/etc/nginx/sites-available/00-maps.conf"      /etc/nginx/sites-enabled/
 ln -sf "/etc/nginx/sites-available/${domain}"         /etc/nginx/sites-enabled/
 ln -sf "/etc/nginx/sites-available/${reality_domain}" /etc/nginx/sites-enabled/
