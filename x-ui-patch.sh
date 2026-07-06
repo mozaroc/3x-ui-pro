@@ -78,8 +78,19 @@ printf "    reality_domain = %s\n" "$reality_domain"
 # Mirror the main installer: symlink the Let's Encrypt cert into /root/cert and
 # register it with `x-ui cert`.
 web_cert=$(db "SELECT value FROM settings WHERE key='webCertFile';")
-if [[ -z "$web_cert" ]]; then
-    blue "Panel has no TLS cert configured — enabling HTTPS..."
+web_key=$( db "SELECT value FROM settings WHERE key='webKeyFile';")
+# The DB may reference a cert that no longer exists on disk (e.g. a dangling
+# /root/cert symlink after a restore) — the panel then fails to serve HTTPS and
+# every proxy_pass https:// (panel + diag bridge) breaks. "-e" follows symlinks,
+# so a broken link reads as missing.
+if [[ -z "$web_cert" || -z "$web_key" ]]; then
+    need_cert=1; blue "Panel has no TLS cert configured — enabling HTTPS..."
+elif [[ ! -e "$web_cert" || ! -e "$web_key" ]]; then
+    need_cert=1; blue "Panel cert configured but missing on disk ($web_cert) — repairing..."
+else
+    need_cert=0; blue "Panel TLS cert present: $web_cert"
+fi
+if [[ $need_cert -eq 1 ]]; then
     if [[ -d "/etc/letsencrypt/live/${domain}" ]]; then
         mkdir -p "/root/cert/${domain}"
         chmod 755 /root/cert/* 2>/dev/null || true
@@ -97,8 +108,6 @@ if [[ -z "$web_cert" ]]; then
     else
         red "No Let's Encrypt cert for ${domain} at /etc/letsencrypt/live/${domain} — cannot enable panel HTTPS."
     fi
-else
-    blue "Panel TLS cert already configured."
 fi
 
 # ── detect xhttp_path ─────────────────────────────────────────────────────────
@@ -428,8 +437,16 @@ server {
         proxy_set_header X-Requested-With XMLHttpRequest;
         proxy_pass_request_body off;
         proxy_set_header Content-Length "";
-        proxy_intercept_errors off;
+        # auth_request emits a raw 500 to the browser if the subrequest returns
+        # anything other than 2xx / 401 / 403 (a login 302, or a 502 when the
+        # panel's HTTPS cert is missing). Coerce every such status to a 401 deny
+        # so the main location redirects to the panel login instead of 500ing.
+        # 401/403 must be listed too, else the server-level "error_page 401 =404"
+        # hijacks a genuine deny into a 404 (which auth_request then 500s on).
+        proxy_intercept_errors on;
+        error_page 300 301 302 303 304 305 307 308 400 401 402 403 404 405 500 501 502 503 504 =401 @diag_denied;
     }
+    location @diag_denied { return 401; }
 
     # No diag cookie yet → bounce through the SSO bridge (checks panel session,
     # mints the cookie) so a bookmarked diag link works once logged into the panel.

@@ -530,8 +530,16 @@ server {
         proxy_set_header X-Requested-With XMLHttpRequest;
         proxy_pass_request_body off;
         proxy_set_header Content-Length "";
-        proxy_intercept_errors off;
+        # auth_request emits a raw 500 to the browser if the subrequest returns
+        # anything other than 2xx / 401 / 403 (a login 302, or a 502 when the
+        # panel's HTTPS cert is missing). Coerce every such status to a 401 deny
+        # so the main location redirects to the panel login instead of 500ing.
+        # 401/403 must be listed too, else the server-level "error_page 401 =404"
+        # hijacks a genuine deny into a 404 (which auth_request then 500s on).
+        proxy_intercept_errors on;
+        error_page 300 301 302 303 304 305 307 308 400 401 402 403 404 405 500 501 502 503 504 =401 @diag_denied;
     }
+    location @diag_denied { return 401; }
 
     # ── Network diagnostics page ─────────────────────────────────────────────
     # No diag cookie yet → bounce through the SSO bridge, which checks the panel
