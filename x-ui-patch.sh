@@ -682,4 +682,5 @@ green " Patch complete"
 green "══════════════════════════════════════════════"
 printf "\n  Panel:       https://%s/%s/\n"  "$domain" "$panel_path"
 printf "  Diagnostics (panel login): https://%s/%s/diag\n"  "$domain" "$panel_path"
+printf "  Diagnostics (direct):      https://%s%s\n"  "$domain" "$diag_path"
 echo
