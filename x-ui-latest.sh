@@ -422,13 +422,11 @@ EOF
     location / { try_files \$uri \$uri/ =404; }
 EOF
 
-    # Main domain vhost (TLS termination at 7443, proxy_protocol)
-    cat > "/etc/nginx/sites-available/${domain}" <<EOF
-# Rate limiting zones (http context)
-limit_req_zone  \$binary_remote_addr zone=diag_api:10m  rate=6r/m;
-limit_req_zone  \$binary_remote_addr zone=diag_page:10m rate=30r/m;
-limit_conn_zone \$binary_remote_addr zone=per_ip:10m;
-
+    # HTTP-level maps. The clash maps are consumed by the shared includes.conf
+    # snippet, which is included by BOTH vhosts, so they live in their own
+    # always-loaded file — never inside a single vhost, or the other vhost's
+    # include would reference an undefined var ("unknown ... variable").
+    cat > /etc/nginx/sites-available/00-maps.conf <<EOF
 # Detect Clash/Mihomo clients by User-Agent
 map \$http_user_agent \$is_clash_ua {
     ~*(clash|clashx|clashn|mihomo|stash|surfboard)  1;
@@ -440,6 +438,14 @@ map "\$is_clash_ua:\$arg_provider" \$serve_clash_yaml {
     "1:"    1;
     default 0;
 }
+EOF
+
+    # Main domain vhost (TLS termination at 7443, proxy_protocol)
+    cat > "/etc/nginx/sites-available/${domain}" <<EOF
+# Rate limiting zones (http context)
+limit_req_zone  \$binary_remote_addr zone=diag_api:10m  rate=6r/m;
+limit_req_zone  \$binary_remote_addr zone=diag_page:10m rate=30r/m;
+limit_conn_zone \$binary_remote_addr zone=per_ip:10m;
 
 # Diagnostics access: cookie issued by the SSO bridge after panel login
 map \$cookie_diag_key \$diag_auth {
@@ -675,6 +681,7 @@ EOF
     # Activate configs
     if [[ -f "/etc/nginx/sites-available/${domain}" ]]; then
         rm -f /etc/nginx/sites-enabled/default /etc/nginx/sites-available/default
+        ln -sf "/etc/nginx/sites-available/00-maps.conf"       /etc/nginx/sites-enabled/
         ln -sf "/etc/nginx/sites-available/${domain}"          /etc/nginx/sites-enabled/
         ln -sf "/etc/nginx/sites-available/${reality_domain}"  /etc/nginx/sites-enabled/
         ln -sf "/etc/nginx/sites-available/80.conf"            /etc/nginx/sites-enabled/
