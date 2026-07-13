@@ -17,6 +17,7 @@ BACKUP_PATHS=(
     /usr/bin/x-ui
     /usr/local/lib/3x-ui-pro
     /etc/letsencrypt
+    /root/cert
     /var/www/html
     /var/www/diagnostics
     /var/www/subpage
@@ -173,6 +174,27 @@ cmd_restore() {
     [[ -f /usr/bin/x-ui ]]        && chmod +x /usr/bin/x-ui
     find /usr/local/lib/3x-ui-pro -name "*.py" -exec chmod +x {} \; 2>/dev/null || true
 
+    # ── panel cert symlinks (/root/cert/<domain> → letsencrypt) ──────────
+    # Backups made before /root/cert was in BACKUP_PATHS lack the symlinks
+    # the panel's webCertFile points to — without them x-ui serves plain
+    # HTTP and every nginx proxy_pass https:// (panel + diag bridge) breaks.
+    # Recreate them from the restored DB ("-e" follows symlinks, so a
+    # dangling link reads as missing).
+    local db=/etc/x-ui/x-ui.db web_cert cert_domain
+    if [[ -f "${db}" ]] && command -v sqlite3 &>/dev/null; then
+        web_cert=$(sqlite3 "${db}" "SELECT value FROM settings WHERE key='webCertFile';" 2>/dev/null || true)
+        if [[ "${web_cert}" =~ ^/root/cert/([^/]+)/ ]]; then
+            cert_domain="${BASH_REMATCH[1]}"
+            if [[ ! -e "${web_cert}" && -d "/etc/letsencrypt/live/${cert_domain}" ]]; then
+                blue "==> Recreating panel cert symlinks in /root/cert/${cert_domain}..."
+                mkdir -p "/root/cert/${cert_domain}"
+                chmod 755 /root/cert/* 2>/dev/null || true
+                ln -sf "/etc/letsencrypt/live/${cert_domain}/fullchain.pem" "/root/cert/${cert_domain}/fullchain.pem"
+                ln -sf "/etc/letsencrypt/live/${cert_domain}/privkey.pem"   "/root/cert/${cert_domain}/privkey.pem"
+            fi
+        fi
+    fi
+
     # ── recreate mtr-backend system user if missing ───────────────────────
     id mtr-backend &>/dev/null || \
         useradd --system --no-create-home --shell /usr/sbin/nologin mtr-backend
@@ -266,6 +288,7 @@ What is backed up:
   /usr/bin/x-ui                   x-ui management CLI
   /usr/local/lib/3x-ui-pro        mtr-backend script
   /etc/letsencrypt                SSL certificates
+  /root/cert                      panel cert symlinks
   /var/www/{html,diagnostics,subpage}  web content
   /etc/systemd/system/{x-ui,mtr-backend}.service
   /etc/ufw/user*.rules            firewall rules
