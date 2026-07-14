@@ -22,6 +22,7 @@
 | Диагностика | MTR-трейсер + тест скорости в браузере |
 | Фейковый сайт | Случайный HTML-сайт-прикрытие |
 | Бэкап | Скрипт резервного копирования |
+| AdGuard Home | Опционально: DNS с блокировкой рекламы (DoH) — отдельный скрипт |
 
 ---
 
@@ -46,6 +47,27 @@ bash x-ui-latest.sh -install y
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/mozaroc/3x-ui-pro/main/x-ui-patch.sh)
+```
+
+---
+
+## AdGuard Home (опционально)
+
+Устанавливает [AdGuard Home](https://github.com/AdguardTeam/AdGuardHome) на домен панели — без отдельного домена и открытых портов, всё через существующий 443:
+
+- **DNS-over-HTTPS** для клиентов: `https://<домен-панели>/dns-query`
+- **Админка** — на случайном пути `/adg-<random>/` (логин и пароль выводит скрипт)
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/mozaroc/3x-ui-pro/main/x-ui-adguard.sh)
+```
+
+Повторный запуск безопасен (настройки и пароль сохраняются). После установщика или патча запустите скрипт ещё раз — они перезаписывают конфиг nginx.
+
+Удаление:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/mozaroc/3x-ui-pro/main/x-ui-adguard.sh) -uninstall y
 ```
 
 ---

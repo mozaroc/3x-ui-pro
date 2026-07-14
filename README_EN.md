@@ -22,6 +22,7 @@ Automated installer for the [3x-ui](https://github.com/MHSanaei/3x-ui) panel wit
 | Diagnostics | MTR tracer + in-browser speed test |
 | Fake site | Random HTML cover site |
 | Backup | Backup / restore script |
+| AdGuard Home | Optional: ad-blocking DNS (DoH) — separate script |
 
 ---
 
@@ -46,6 +47,27 @@ Apply current fixes to an existing installation (no DB changes):
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/mozaroc/3x-ui-pro/main/x-ui-patch.sh)
+```
+
+---
+
+## AdGuard Home (optional)
+
+Installs [AdGuard Home](https://github.com/AdguardTeam/AdGuardHome) on the panel domain — no separate domain or open ports, everything goes through the existing 443:
+
+- **DNS-over-HTTPS** for clients: `https://<panel-domain>/dns-query`
+- **Admin UI** — at a random `/adg-<random>/` path (login and password are printed by the script)
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/mozaroc/3x-ui-pro/main/x-ui-adguard.sh)
+```
+
+Re-running is safe (settings and password are kept). After the installer or the patch, run this script again — they rewrite the nginx config.
+
+Uninstall:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/mozaroc/3x-ui-pro/main/x-ui-adguard.sh) -uninstall y
 ```
 
 ---
