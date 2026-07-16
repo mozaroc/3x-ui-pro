@@ -805,12 +805,17 @@ configure_xui_db() {
     private_key=$(echo "$output" | grep "^PrivateKey:" | awk '{print $2}')
     public_key=$(echo "$output"  | grep "^Password"   | awk '{print $3}')
     trojan_pass=$(gen_random_string 10)
-    # Per-host group_id: without it the panel cannot edit or delete the host
-    local gid_reality gid_ws gid_xhttp gid_trojan
-    gid_reality=$(gen_group_id)
-    gid_ws=$(gen_group_id)
-    gid_xhttp=$(gen_group_id)
-    gid_trojan=$(gen_group_id)
+    # Per-host group_id: without it the panel cannot edit or delete the host.
+    # The column only exists since 3x-ui v3.5.0 (pinnable via -version), so
+    # probe the migrated schema and skip it on older releases.
+    local gid_col="" gid_reality="" gid_ws="" gid_xhttp="" gid_trojan=""
+    if sqlite3 "$XUIDB" "PRAGMA table_info(hosts);" | grep -qw "group_id"; then
+        gid_col='"group_id",'
+        gid_reality="'$(gen_group_id)',"
+        gid_ws="'$(gen_group_id)',"
+        gid_xhttp="'$(gen_group_id)',"
+        gid_trojan="'$(gen_group_id)',"
+    fi
     emoji_flag=$(LC_ALL=en_US.UTF-8 curl -s --max-time 10 https://ipwho.is/ | jq -r '.flag.emoji' 2>/dev/null)
     [[ -z "$emoji_flag" || "$emoji_flag" == "null" ]] && emoji_flag="🌐"
 
@@ -1000,12 +1005,12 @@ VALUES (
 -- rendered as the share-link endpoint at subscription time.
 -- REALITY keeps its own TLS params (security=same); the rest front through
 -- nginx at :443 with TLS.
-INSERT INTO "hosts" ("inbound_id","group_id","sort_order","remark","address","port","security","fingerprint","alpn")
+INSERT INTO "hosts" ("inbound_id",${gid_col}"sort_order","remark","address","port","security","fingerprint","alpn")
 VALUES
-    ((SELECT id FROM inbounds WHERE tag='inbound-8443'),           '${gid_reality}', 0, 'reality', '${domain}', 443, 'same', '',        '[]'),
-    ((SELECT id FROM inbounds WHERE tag='inbound-${ws_port}'),     '${gid_ws}',      0, 'ws',      '${domain}', 443, 'tls',  'firefox', '["h2","http/1.1"]'),
-    ((SELECT id FROM inbounds WHERE tag='inbound-/dev/shm/uds2023.sock,0666:0|'), '${gid_xhttp}', 0, 'xhttp', '${domain}', 443, 'tls', 'firefox', '["h2","http/1.1"]'),
-    ((SELECT id FROM inbounds WHERE tag='inbound-${trojan_port}'), '${gid_trojan}',  0, 'trojan',  '${domain}', 443, 'tls',  'firefox', '["h2","http/1.1"]');
+    ((SELECT id FROM inbounds WHERE tag='inbound-8443'),           ${gid_reality} 0, 'reality', '${domain}', 443, 'same', '',        '[]'),
+    ((SELECT id FROM inbounds WHERE tag='inbound-${ws_port}'),     ${gid_ws}      0, 'ws',      '${domain}', 443, 'tls',  'firefox', '["h2","http/1.1"]'),
+    ((SELECT id FROM inbounds WHERE tag='inbound-/dev/shm/uds2023.sock,0666:0|'), ${gid_xhttp} 0, 'xhttp', '${domain}', 443, 'tls', 'firefox', '["h2","http/1.1"]'),
+    ((SELECT id FROM inbounds WHERE tag='inbound-${trojan_port}'), ${gid_trojan}  0, 'trojan',  '${domain}', 443, 'tls',  'firefox', '["h2","http/1.1"]');
 EOF
 
     /usr/local/x-ui/x-ui setting \
