@@ -742,12 +742,12 @@ install_panel() {
         fi
     else
         tag_version=$(curl -Ls "https://api.github.com/repos/MHSanaei/3x-ui/releases/latest" \
-            | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-        if [[ -z "$tag_version" ]]; then
+            | grep -m1 '"tag_name":' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')
+        if [[ ! "$tag_version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             tag_version=$(curl -4 -Ls "https://api.github.com/repos/MHSanaei/3x-ui/releases/latest" \
-                | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+                | grep -m1 '"tag_name":' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')
         fi
-        if [[ -z "$tag_version" ]]; then
+        if [[ ! "$tag_version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Failed to fetch 3x-ui version." && exit 1
         fi
     fi
