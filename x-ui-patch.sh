@@ -125,7 +125,7 @@ xhttp_path=""
 # 1. from existing includes.conf
 if [[ -f /etc/nginx/snippets/includes.conf ]]; then
     xhttp_path=$(grep -A1 '#XHTTP' /etc/nginx/snippets/includes.conf \
-        | grep 'location' | grep -oP 'location /\K[^ {]+' | head -1 || true)
+        | grep 'location' | grep -oP 'location\s+(?:\^~\s+)?/\K[^\s{]+' | head -1 | sed 's|/$||' || true)
 fi
 # 2. from DB (xhttp inbound stream_settings)
 if [[ -z "$xhttp_path" ]]; then
@@ -298,18 +298,16 @@ cat > /etc/nginx/snippets/includes.conf <<EOF
     }
 
     #XHTTP
-    location /${xhttp_path} {
-        grpc_pass grpc://unix:/dev/shm/uds2023.sock;
-        grpc_buffer_size      16k;
-        grpc_socket_keepalive on;
+    location ^~ /${xhttp_path}/ {
+        client_max_body_size  0;
+        client_body_timeout   1h;
         grpc_read_timeout     1h;
         grpc_send_timeout     1h;
         grpc_set_header Connection        "";
-        grpc_set_header X-Forwarded-For   \$proxy_add_x_forwarded_for;
-        grpc_set_header X-Forwarded-Proto \$scheme;
-        grpc_set_header X-Forwarded-Port  \$server_port;
         grpc_set_header Host              \$host;
-        grpc_set_header X-Forwarded-Host  \$host;
+        grpc_set_header X-Real-IP         \$remote_addr;
+        grpc_set_header X-Forwarded-For   \$remote_addr;
+        grpc_pass unix:/dev/shm/uds2023.sock;
     }
 
     #Xray generic proxy (WS / gRPC by port+path)
@@ -388,6 +386,7 @@ server {
     # this, nginx bakes :7443 into redirect Location headers (return/error_page),
     # so browsers get sent to an unreachable port. Keep redirects relative.
     absolute_redirect off;
+    http2_max_concurrent_streams 256;
     # Larger h2 preread window improves single-stream upload throughput
     http2_body_preread_size 128k;
     client_body_buffer_size 512k;

@@ -376,18 +376,16 @@ EOF
     }
 
     #XHTTP
-    location /${xhttp_path} {
-        grpc_pass grpc://unix:/dev/shm/uds2023.sock;
-        grpc_buffer_size      16k;
-        grpc_socket_keepalive on;
+    location ^~ /${xhttp_path}/ {
+        client_max_body_size  0;
+        client_body_timeout   1h;
         grpc_read_timeout     1h;
         grpc_send_timeout     1h;
         grpc_set_header Connection        "";
-        grpc_set_header X-Forwarded-For   \$proxy_add_x_forwarded_for;
-        grpc_set_header X-Forwarded-Proto \$scheme;
-        grpc_set_header X-Forwarded-Port  \$server_port;
         grpc_set_header Host              \$host;
-        grpc_set_header X-Forwarded-Host  \$host;
+        grpc_set_header X-Real-IP         \$remote_addr;
+        grpc_set_header X-Forwarded-For   \$remote_addr;
+        grpc_pass unix:/dev/shm/uds2023.sock;
     }
 
     #Xray generic proxy (WS / gRPC by port+path)
@@ -469,6 +467,7 @@ server {
     # this, nginx bakes :7443 into redirect Location headers (return/error_page),
     # so browsers get sent to an unreachable port. Keep redirects relative.
     absolute_redirect off;
+    http2_max_concurrent_streams 256;
     # Larger h2 preread window improves single-stream upload throughput
     http2_body_preread_size 128k;
     client_body_buffer_size 512k;
@@ -930,7 +929,7 @@ VALUES (
 INSERT INTO "inbounds"
     ("user_id","up","down","total","remark","enable","expiry_time","listen","port","protocol","settings","stream_settings","tag","sniffing")
 VALUES (
-    '1','0','0','0','${emoji_flag} xhttp','0','0','/dev/shm/uds2023.sock,0666','0','vless',
+    '1','0','0','0','${emoji_flag} xhttp','1','0','/dev/shm/uds2023.sock,0666','0','vless',
     '{
   "clients": [],
   "decryption": "none",
@@ -941,31 +940,10 @@ VALUES (
   "security": "none",
   "xhttpSettings": {
     "path": "/${xhttp_path}",
-    "host": "${domain}",
-    "headers": {},
-    "scMaxBufferedPosts": 30,
-    "scMaxEachPostBytes": "1000000",
-    "noSSEHeader": false,
-    "xPaddingBytes": "100-1000",
-    "mode": "packet-up"
+    "mode": "stream-up"
   },
   "sockopt": {
-    "acceptProxyProtocol": false,
-    "tcpFastOpen": true,
-    "mark": 0,
-    "tproxy": "off",
-    "tcpMptcp": true,
-    "tcpNoDelay": true,
-    "domainStrategy": "UseIP",
-    "tcpMaxSeg": 1440,
-    "dialerProxy": "",
-    "tcpKeepAliveInterval": 0,
-    "tcpKeepAliveIdle": 300,
-    "tcpUserTimeout": 10000,
-    "tcpcongestion": "bbr",
-    "V6Only": false,
-    "tcpWindowClamp": 600,
-    "interface": ""
+    "trustedXForwardedFor": ["X-Forwarded-For"]
   }
 }',
     'inbound-/dev/shm/uds2023.sock,0666:0|',
