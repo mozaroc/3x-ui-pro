@@ -1188,6 +1188,8 @@ setup_firewall() {
     ufw allow 80/tcp
     ufw allow 443/tcp
     ufw allow 443/udp
+    # Remote 3x-ui nodes call the panel API on webPort directly.
+    ufw allow "${panel_port}/tcp"
     ufw --force enable
 }
 

@@ -735,6 +735,9 @@ else
     exit 1
 fi
 
+# Remote 3x-ui nodes call the panel API on webPort directly, bypassing nginx :443.
+ufw allow "${panel_port}/tcp"
+
 # ─────────────────────────────────────────────────────────────────────────────
 # RESULTS
 # ─────────────────────────────────────────────────────────────────────────────

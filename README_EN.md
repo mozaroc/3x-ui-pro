@@ -24,6 +24,8 @@ Automated installer for the [3x-ui](https://github.com/MHSanaei/3x-ui) panel wit
 | Backup | Backup / restore script |
 | AdGuard Home | Optional: ad-blocking DNS (DoH) — separate script |
 
+Remote nodes need access to the panel's TCP port (`webPort`, a random port in the 10000–59151 range). The installer opens it in UFW because node API requests connect directly to this port and bypass nginx on port 443. If your VPS provider has a separate network firewall or security group, allow the same TCP port there too.
+
 ---
 
 ## Installation
