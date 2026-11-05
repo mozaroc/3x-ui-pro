@@ -431,7 +431,7 @@ EOF
     cat > /etc/nginx/sites-available/00-maps.conf <<EOF
 # Detect Clash/Mihomo clients by User-Agent
 map \$http_user_agent \$is_clash_ua {
-    ~*(clash|clashx|clashn|mihomo|stash|surfboard)  1;
+    ~*(clash|clashx|clashn|mihomo|stash|surfboard|prizrak-box|rabbit-hole)  1;
     default                                          0;
 }
 # Serve clash.yaml only when: Clash UA AND no ?provider=1 query param
