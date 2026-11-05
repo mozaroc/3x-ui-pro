@@ -353,7 +353,7 @@ EOF
 # vhost's include would reference an undefined var ("unknown ... variable").
 cat > /etc/nginx/sites-available/00-maps.conf <<EOF
 map \$http_user_agent \$is_clash_ua {
-    ~*(clash|clashx|clashn|mihomo|stash|surfboard)  1;
+    ~*(clash|clashx|clashn|mihomo|stash|surfboard|prizrak-box|rabbit-hole)  1;
     default                                          0;
 }
 map "\$is_clash_ua:\$arg_provider" \$serve_clash_yaml {
