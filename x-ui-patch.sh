@@ -353,7 +353,7 @@ EOF
 # vhost's include would reference an undefined var ("unknown ... variable").
 cat > /etc/nginx/sites-available/00-maps.conf <<EOF
 map \$http_user_agent \$is_clash_ua {
-    ~*(clash|clashx|clashn|mihomo|stash|surfboard)  1;
+    ~*(clash|clashx|clashn|mihomo|stash|surfboard|prizrak-box|rabbit-hole)  1;
     default                                          0;
 }
 map "\$is_clash_ua:\$arg_provider" \$serve_clash_yaml {
@@ -533,9 +533,6 @@ server {
         proxy_pass          http://127.0.0.1:${mtr_backend_port}/api/clash\$is_args\$args;
         proxy_http_version  1.1;
         proxy_set_header    X-Real-IP \$remote_addr;
-        add_header          Content-Type        "text/yaml; charset=utf-8" always;
-        add_header          Content-Disposition "attachment; filename=clash.yaml" always;
-        add_header          Cache-Control       "no-store" always;
     }
 
     include /etc/nginx/snippets/includes.conf;
