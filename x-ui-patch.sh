@@ -533,9 +533,6 @@ server {
         proxy_pass          http://127.0.0.1:${mtr_backend_port}/api/clash\$is_args\$args;
         proxy_http_version  1.1;
         proxy_set_header    X-Real-IP \$remote_addr;
-        add_header          Content-Type        "text/yaml; charset=utf-8" always;
-        add_header          Content-Disposition "attachment; filename=clash.yaml" always;
-        add_header          Cache-Control       "no-store" always;
     }
 
     include /etc/nginx/snippets/includes.conf;
