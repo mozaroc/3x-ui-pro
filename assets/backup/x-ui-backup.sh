@@ -9,6 +9,8 @@ set -Eeuo pipefail
 BACKUP_STORE="/var/backups/x-ui"
 PACKAGES="nginx-full certbot python3 sqlite3 curl wget jq ufw mtr-tiny"
 
+_STAGING_DIR=""
+
 # ── paths to back up ──────────────────────────────────────────────────────────
 BACKUP_PATHS=(
     /etc/nginx
@@ -45,11 +47,18 @@ make_staging() {
     mktemp -d "${BACKUP_STORE}/.${prefix}-XXXXXX"
 }
 
+cleanup_staging() {
+    if [[ -n "${_STAGING_DIR:-}" && -d "${_STAGING_DIR}" ]]; then
+        rm -rf "${_STAGING_DIR}"
+    fi
+}
+trap cleanup_staging EXIT INT TERM
+
 # ── backup ────────────────────────────────────────────────────────────────────
 cmd_backup() {
     require_root
 
-    local ts name staging dest
+    local ts name dest
     ts=$(date +%Y%m%d-%H%M%S)
     name="x-ui-backup-${ts}"
 
@@ -62,9 +71,7 @@ cmd_backup() {
     have_kb=$(avail_kb "${BACKUP_STORE}")
     (( have_kb >= need_kb )) || die "Not enough free space in ${BACKUP_STORE}: need ~$(( need_kb / 1024 )) MB, have $(( have_kb / 1024 )) MB"
 
-    staging=$(make_staging staging)
-    trap 'rm -rf "${staging}"' EXIT
-
+    _STAGING_DIR=$(make_staging staging)
     dest="${BACKUP_STORE}/${name}.tar.gz"
 
     blue "==> Stopping x-ui for consistent DB snapshot..."
@@ -72,7 +79,7 @@ cmd_backup() {
 
     # ── collect filesystem paths ───────────────────────────────────────────
     blue "==> Collecting files..."
-    local files_root="${staging}/files"
+    local files_root="${_STAGING_DIR}/files"
     for path in "${BACKUP_PATHS[@]}"; do
         [[ -e "${path}" ]] || continue
         local dst="${files_root}${path}"
@@ -88,16 +95,16 @@ cmd_backup() {
     done
 
     # ── crontab ───────────────────────────────────────────────────────────
-    crontab -l 2>/dev/null > "${staging}/root-crontab" || true
+    crontab -l 2>/dev/null > "${_STAGING_DIR}/root-crontab" || true
 
     if [[ -d /etc/cron.d ]]; then
-        cp -a /etc/cron.d "${staging}/cron.d"
+        cp -a /etc/cron.d "${_STAGING_DIR}/cron.d"
     fi
 
     # ── metadata ──────────────────────────────────────────────────────────
     local xui_ver
     xui_ver=$(x-ui version 2>/dev/null | grep -oP '\d+\.\d+\.\d+' | head -1 || echo "unknown")
-    cat > "${staging}/meta.json" <<JSON
+    cat > "${_STAGING_DIR}/meta.json" <<JSON
 {
   "created":   "${ts}",
   "hostname":  "$(hostname -f 2>/dev/null || hostname)",
@@ -112,7 +119,7 @@ JSON
 
     # ── compress ──────────────────────────────────────────────────────────
     blue "==> Compressing..."
-    tar -czf "${dest}" -C "${staging}" .
+    tar -czf "${dest}" -C "${_STAGING_DIR}" .
 
     local size
     size=$(du -sh "${dest}" | cut -f1)
@@ -135,16 +142,14 @@ cmd_restore() {
     (( have_kb >= unpacked_kb * 2 + 102400 )) || \
         die "Not enough free space in ${BACKUP_STORE}: need ~$(( (unpacked_kb * 2 + 102400) / 1024 )) MB, have $(( have_kb / 1024 )) MB"
 
-    local staging
-    staging=$(make_staging restore)
-    trap 'rm -rf "${staging}"' EXIT
+    _STAGING_DIR=$(make_staging restore)
 
     blue "==> Extracting backup: ${backup_file}"
-    tar -xzf "${backup_file}" -C "${staging}"
+    tar -xzf "${backup_file}" -C "${_STAGING_DIR}"
 
-    if [[ -f "${staging}/meta.json" ]]; then
+    if [[ -f "${_STAGING_DIR}/meta.json" ]]; then
         blue "==> Backup metadata:"
-        cat "${staging}/meta.json"
+        cat "${_STAGING_DIR}/meta.json"
         echo
     fi
 
@@ -162,8 +167,8 @@ cmd_restore() {
 
     # ── restore files ─────────────────────────────────────────────────────
     blue "==> Restoring files..."
-    if [[ -d "${staging}/files" ]]; then
-        cp -a "${staging}/files/." /
+    if [[ -d "${_STAGING_DIR}/files" ]]; then
+        cp -a "${_STAGING_DIR}/files/." /
     fi
 
     # ── permissions ───────────────────────────────────────────────────────
@@ -225,13 +230,13 @@ cmd_restore() {
 
     # ── crontab ───────────────────────────────────────────────────────────
     blue "==> Restoring cron..."
-    if [[ -s "${staging}/root-crontab" ]]; then
-        crontab - < "${staging}/root-crontab"
+    if [[ -s "${_STAGING_DIR}/root-crontab" ]]; then
+        crontab - < "${_STAGING_DIR}/root-crontab"
         green "    Root crontab restored"
     fi
 
-    if [[ -d "${staging}/cron.d" ]]; then
-        cp -a "${staging}/cron.d/." /etc/cron.d/
+    if [[ -d "${_STAGING_DIR}/cron.d" ]]; then
+        cp -a "${_STAGING_DIR}/cron.d/." /etc/cron.d/
         green "    /etc/cron.d restored"
     fi
 
